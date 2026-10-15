@@ -2,7 +2,7 @@
 
 **Seus filmes do Windows na TV. By Fagner Lemes.**
 
-Aplicativo desktop para transmitir **MP4 e MKV** pela rede local ao Chromecast, com foco no Chromecast tradicional de **2ª geração**. Interface em português, seleção de áudio/legendas embutidas e conversão durante a reprodução.
+Aplicativo desktop para transmitir arquivos MP4 e MKV pela rede local a dispositivos Google Cast, com perfil padrão de conversão voltado ao Chromecast de 2ª geração. A compatibilidade com outros modelos deve ser validada no aparelho.
 
 **Versão pública: 0.1.0 · Windows x64 · Python + PySide6 · Código sob MIT**
 
