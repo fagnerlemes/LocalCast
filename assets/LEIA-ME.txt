@@ -1,0 +1,13 @@
+Assinatura visual fornecida por Fagner Lemes para uso no LocalCast.
+Arquivo original: by Fagner Lemes.png, preservado com transparência, sem alterações.
+A interface reduz apenas o tamanho de exibição e mantém "By Fagner Lemes" como
+texto alternativo. Autoria no código: src/localcast/__init__.py, __author__.
+
+localcast-logo.png: logo criada para o LocalCast com a ferramenta integrada de
+geração de imagens, preservando o PNG com transparência. localcast.ico contém
+a mesma arte em 7 resoluções para Windows. Descrição em docs/LOGO.md.
+
+localcast-espera-* e localcast-espera.mp4: composição com capas reais obtidas via
+OMDb, logo do LocalCast e assinatura do autor, para uso pessoal/não comercial.
+Fontes em fontes-filmes-espera.json; funcionamento em docs/TELA-DE-ESPERA.md.
+A chave OMDb não está incluída nestes arquivos nem nos pacotes distribuídos.

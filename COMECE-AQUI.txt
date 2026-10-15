@@ -1,0 +1,55 @@
+LOCALCAST — WINDOWS — MP4 E MKV
+
+By Fagner Lemes — versão 0.1.0 com logo própria, montagem de filmes e tela de espera.
+
+Se recebeu o executável: abra LocalCast.exe com dois cliques.
+O código-fonte continua em src/localcast. Teste alterações pelo iniciar.cmd;
+para atualizar o EXE, feche o antigo e execute gerar-exe.cmd.
+O EXE novo fica na pasta principal e em dist/LocalCast.exe.
+Instruções completas: docs/EXECUTAVEL.md.
+
+1. Se esta pasta inclui runtime\python, abra iniciar.cmd diretamente.
+   Python privado e dependências já estão incluídos; não precisa instalar no Windows.
+2. preparar.cmd confere a versão portátil. Sem runtime/Python instalado, oferece
+   baixar e preparar Python portátil nesta pasta (digite S para autorizar).
+3. Na versão portátil, FFmpeg/FFprobe já estão em tools. No código-fonte, baixe em:
+   https://ffmpeg.org/download.html#build-windows e coloque os dois EXEs em tools.
+4. Execute diagnostico.cmd. Ambos precisam aparecer com ok: true.
+5. Execute iniciar.cmd. Busque Chromecast > Selecione o aparelho > Conectar.
+   A tela de espera é enviada. Depois abra MP4/MKV, escolha faixas e clique Transmitir.
+   Também pode transmitir um arquivo diretamente, sem usar Conectar antes.
+6. Para trocar faixas com o vídeo aberto, escolha nos campos e clique Aplicar faixas.
+   A transmissão recarrega na posição atual. Sem legenda desativa a legenda.
+7. Parar encerra o vídeo e volta à tela de espera se a conexão estiver disponível.
+   Desconectar encerra a sessão no Chromecast.
+   Fechar a janela também desconecta e solicita a volta à tela ambiente.
+8. Em Conversão, escolha Automática até 1080p/720p ou Original, sem conversão.
+   Original envia MP4/MKV sem alterar codecs ou contêiner; pode falhar no Chromecast.
+   Áudio e legendas dependem do aparelho nesse modo. Não há conversão de fallback.
+9. iniciar.cmd não mantém o terminal aberto. Para diagnóstico com terminal,
+   use iniciar-debug.cmd. O aplicativo precisa continuar aberto para transmitir.
+10. Depuração fica fechada por padrão: clique Depuração para mensagens/diagnóstico.
+    IPs manuais ficam em Rede e conexão, abaixo da busca do Chromecast.
+11. Configurar filmes permite colar uma chave gratuita OMDb e buscar capa/notas/elenco.
+    Obtenha em https://www.omdbapi.com/apikey.aspx (FREE), ative por e-mail e cole no app.
+    Corrigir identificação permite buscar pelo título/ano ou ID IMDb.
+    Rotten Tomatoes aparece só quando retornado. A reprodução funciona sem essa chave.
+
+PC e Chromecast precisam estar na mesma rede LAN. Permita Python na rede
+Privada do Windows. Não precisa instalar nada no Chromecast/TV.
+
+Primeiro teste: MP4 H264/AAC. Depois marque Forçar HLS e compare.
+Depois teste MKV. O app converte MKV durante a reprodução para H264/AAC.
+HEVC 4K + EAC3 5.1 vira até 1080p/30 fps + AAC estéreo.
+
+README.md: instalação, amostras sintéticas, testes, firewall e empacotamento.
+docs/TESTES.md: checklist para preencher na TV.
+docs/VALIDACAO.md: resultados dos testes locais; nenhum teste na TV pelo agente.
+Legendas embutidas SRT, ASS e PGS foram validadas localmente. São incorporadas
+à imagem durante a conversão; SRT externo ainda não possui seleção na interface.
+O ZIP LocalCast-Portable inclui Python,
+dependências e FFmpeg/FFprobe. O ZIP de código-fonte não inclui esses binários.
+
+Portable: preserve runtime, src, scripts e tools juntos; pode mover a pasta inteira.
+Dados e logs: localcast-data dentro da pasta. Use uma pasta gravável no Windows x64.
+

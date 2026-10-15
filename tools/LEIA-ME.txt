@@ -1,0 +1,5 @@
+Coloque ffmpeg.exe e ffprobe.exe aqui (build x64 com libx264, libx265, AAC e EAC3).
+Para HDR também são necessários zscale e tonemap.
+Download: https://ffmpeg.org/download.html#build-windows
+Alternativas: PATH, LOCALCAST_FFMPEG e LOCALCAST_FFPROBE.
+Nenhum binário FFmpeg está incluído no código-fonte.

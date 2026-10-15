@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "localcast-windows-mvp"
+version = "0.1.0"
+authors = [{name = "Fagner Lemes"}]
+description = "Local MP4/MKV casting with on-demand HLS for Chromecast 2nd generation"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["PySide6-Essentials==6.12.0", "PyChromecast==14.0.10"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "pyinstaller>=6,<7", "ruff>=0.9,<1"]
+
+[project.scripts]
+localcast = "localcast.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/fagnerlemes/LocalCast"
+Issues = "https://github.com/fagnerlemes/LocalCast/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["integration: requires ffmpeg and ffprobe"]
+
+[tool.ruff]
+line-length = 100
+

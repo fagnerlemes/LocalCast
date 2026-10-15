@@ -1,0 +1,20 @@
+{
+  "version": "ffmpeg version 9.0.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+  "source": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+  "checksum_source": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.2-essentials_build.zip.sha256",
+  "archive_sha256": "60F467265B1E312373DBCD92200C2618A74850F98D3D078E94296BB3FA2047BA",
+  "ffmpeg_sha256": "3256173F3F8BFFD7DF12227C68ADF68025EDB1832273A9530688A7BB1ED8EDEC",
+  "ffprobe_sha256": "F0D36ECBBDD3BCFAC3EFA078C96C7271C2E68B3810595552AC3B7F17E9A65C52",
+  "capabilities": {
+    "libx264": true,
+    "libx265": true,
+    "aac_encoder": true,
+    "eac3_decoder": true,
+    "hevc_decoder": true,
+    "zscale": true,
+    "tonemap": true
+  },
+  "source_commit": "https://github.com/FFmpeg/FFmpeg/commit/946fcce07b",
+  "source_repository": "https://github.com/FFmpeg/FFmpeg",
+  "build_provider": "https://www.gyan.dev/ffmpeg/builds/"
+}

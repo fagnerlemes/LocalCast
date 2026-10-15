@@ -1,0 +1,3 @@
+PySide6-Essentials==6.12.0
+PyChromecast==14.0.10
+
