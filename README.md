@@ -42,7 +42,7 @@ O aplicativo precisa permanecer aberto enquanto serve o vídeo à TV. Não preci
 
 **Abrir MKV no aplicativo não significa que o Chromecast decodifique MKV/HEVC diretamente.** No modo automático, o LocalCast converte seu conteúdo. O Default Media Receiver e o firmware também influenciam o resultado.
 
-Há testes locais com HTTP real, FFmpeg/FFprobe, vídeos sintéticos e receiver simulado. **Não houve teste físico na TV pelo agente.** HLS no firmware, filmes longos, HDR real e desempenho devem ser conferidos no seu equipamento: [checklist](docs/TESTES.md) e [resultados locais](docs/VALIDACAO.md).
+Há testes locais com HTTP real, FFmpeg/FFprobe, vídeos sintéticos e receiver simulado. HLS no firmware, filmes longos, HDR real e desempenho devem ser conferidos no seu equipamento: [checklist](docs/TESTES.md) e [resultados locais](docs/VALIDACAO.md).
 
 ## Informações dos filmes
 
