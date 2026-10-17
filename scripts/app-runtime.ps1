@@ -16,6 +16,6 @@ function Get-LocalCastAppRuntime {
 function Initialize-LocalCastAppRuntime {
     param($Runtime, [string]$Root)
     if ($Runtime.Portable -and -not $env:LOCALCAST_DATA_DIR) {
-        $env:LOCALCAST_DATA_DIR = Join-Path $Root 'localcast-data'
+        $env:LOCALCAST_DATA_DIR = Join-Path $Root 'localcast-dev-data'
     }
 }

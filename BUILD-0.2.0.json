@@ -1,0 +1,47 @@
+{
+  "version": "0.2.0",
+  "status": "local-validation-no-public-release",
+  "date": "2026-10-16",
+  "author": "Fagner Lemes",
+  "base_version": "0.1.1",
+  "base_commit": "c8dd0cf793a5ecd6e4173d11e6cdbf91006e54ad",
+  "local_branch": "feature/resume-playback",
+  "distribution": "per-user Windows x64 installer with onedir application",
+  "installer": {
+    "file": "LocalCast-Setup-0.2.0.exe",
+    "size_bytes": 96146488,
+    "sha256": "25cc56895f34edba425f9d873070b1420c47a9aa5b639433cebf973fc6421caf"
+  },
+  "application": {
+    "file": "LocalCast.exe",
+    "size_bytes": 5487657,
+    "sha256": "2b44c4b70e54eda1492b45e4f12cd05d002b598085d0cae9660c27443f23a506"
+  },
+  "bundle_bytes": 326276443,
+  "python": "3.15.0",
+  "PySide6": "6.12.0",
+  "PyChromecast": "14.0.10",
+  "psutil": "7.2.2",
+  "ffmpeg": "9.0.2",
+  "PyInstaller": "6.22.3",
+  "InnoSetup": "6.7.3",
+  "default_http_port": 8767,
+  "installed_profile": "%LOCALAPPDATA%/LocalCast",
+  "development_profile": "localcast-dev-data",
+  "tests": {
+    "suite": "131 passed in 97.28s",
+    "suite_python": "3.12.14",
+    "private_python_3_15_history_process_profile": "22 passed",
+    "ruff": "E4,E7,E9,F,I passed",
+    "real_ffmpeg_cpu_gpu_integration": "18 passed; included in full suite",
+    "gpu_tested": "NVIDIA NVENC + CUDA",
+    "actual_installed_exe_offscreen": true,
+    "actual_installed_exe_native_windows": true,
+    "reinstallation_preserves_history_and_settings": true,
+    "uninstall_preserves_data": true,
+    "installer_script_skip_build": true,
+    "physical_chromecast": false
+  },
+  "personal_api_key_included": false,
+  "application_codesigned": false
+}

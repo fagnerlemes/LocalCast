@@ -1,0 +1,58 @@
+{
+  "version": "0.2.0",
+  "build": "020-patch02",
+  "date": "2026-10-16",
+  "status": "local-delivery-no-public-release",
+  "author": "Fagner Lemes",
+  "base_source_commit": "b0b11702650fc7dcef6c1167465321d25f913053",
+  "required_base": "LocalCast 0.2.0 with update 01 installed",
+  "patch": {
+    "file": "LocalCast-Patch-0.2.0-02.exe",
+    "size_bytes": 7683975,
+    "sha256": "a11095504133791fbe82cfc53887190d2fbb14b2bea7196ff4aca024e48d7eda"
+  },
+  "full_installer": {
+    "file": "instalador-completo/LocalCast-Setup-0.2.0-patch02.exe",
+    "size_bytes": 96166831,
+    "sha256": "c50d73586a76988885c9122b45ed8e9f63f493764c27429c56d51cbc91772352"
+  },
+  "application": {
+    "file": "LocalCast.exe",
+    "size_bytes": 5496499,
+    "sha256": "aa29dd7cac4e43c3dbe6bf1c369f8edebb372ac204f9dfa012ea381b76996990"
+  },
+  "changed_files": {
+    "_internal/base_library.zip": {
+      "before": "6773879aba97e1397a4a1915a0d71e02d2d3dff8acbae66ff5ef5d298d78a967",
+      "after": "44baa78a55c8da4f86340681ba4d9afd60e157aaf94ba791c739377df8078059"
+    },
+    "LocalCast.exe": {
+      "before": "979709fc2ba1f8f5ab5292fa3f621d4ab5c48221faa8345fde32104bfa79f31a",
+      "after": "aa29dd7cac4e43c3dbe6bf1c369f8edebb372ac204f9dfa012ea381b76996990"
+    }
+  },
+  "payload_bytes": 6800426,
+  "tests": {
+    "automated": "128 passed, 18 deselected in 26.10s",
+    "suite_python": "3.12.14",
+    "ruff": "E4,E7,E9,F,I passed",
+    "conversion_integration": "not rerun; FFmpeg pipeline unchanged",
+    "isolated_installer_validation": {
+      "patch_applied": true,
+      "reapplication": true,
+      "rejects_wrong_base_before_writing": true,
+      "rejects_missing_installation": true,
+      "rejects_running_app": true,
+      "history_and_settings_preserved": true,
+      "original_uninstaller_preserved_and_working": true,
+      "users_running_executable_unchanged": true,
+      "physical_cast_tested": false
+    },
+    "native_windows_smoke": true,
+    "bundled_ffmpeg_ffprobe_ok": true,
+    "physical_chromecast": false
+  },
+  "history_schema_changed": false,
+  "personal_api_key_included": false,
+  "application_codesigned": false
+}

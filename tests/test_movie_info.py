@@ -126,7 +126,10 @@ def test_background_lookup_finishes_without_blocking_gui_and_closes():
     requested, release = threading.Event(), threading.Event()
 
     class Client:
-        def lookup(self, query, key, refresh):
+        from types import SimpleNamespace
+        store = SimpleNamespace(epoch=0)
+
+        def lookup(self, query, key, refresh, cache_epoch=None):
             requested.set()
             release.wait(3)
             return query.title

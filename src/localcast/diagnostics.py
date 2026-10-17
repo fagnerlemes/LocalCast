@@ -8,8 +8,18 @@ import subprocess
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from . import __version__
+from . import __build__, __version__
 from .paths import data_dir, process_options, tool_path
+
+
+def close_logging():
+    logger = logging.getLogger()
+    for handler in list(logger.handlers):
+        if isinstance(handler, RotatingFileHandler) and (
+            Path(handler.baseFilename).parent == data_dir() / 'logs'
+        ):
+            logger.removeHandler(handler)
+            handler.close()
 
 
 def configure_logging() -> Path:
@@ -26,12 +36,13 @@ def configure_logging() -> Path:
 def environment_report() -> dict:
     report = {
         "localcast": __version__,
+        "build": __build__,
         "python": platform.python_version(),
         "system": platform.platform(),
         "data_dir": str(data_dir()),
         "hardware_test": "Não executado por este relatório",
     }
-    for package in ("PySide6", "PyChromecast"):
+    for package in ("PySide6", "PyChromecast", "psutil"):
         try:
             report[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
@@ -65,6 +76,8 @@ def environment_report() -> dict:
 
 def hints(snapshot: dict) -> list[str]:
     messages = []
+    if snapshot.get('history_warning'):
+        messages.append(snapshot['history_warning'])
     if snapshot.get("last_failure"):
         failure = snapshot["last_failure"]
         messages.append("Última falha: " + failure["message"])
@@ -89,6 +102,10 @@ def hints(snapshot: dict) -> list[str]:
         )
     transcode = snapshot.get("transcode")
     if transcode:
+        if transcode.get("control_warning"):
+            messages.append("Controle da reserva: " + transcode["control_warning"])
+        if transcode.get("fallbacks"):
+            messages.append("GPU não concluiu o início; alternativa ativa: " + transcode["encoder"])
         if transcode.get("error"):
             messages.append(transcode["error"])
         if transcode.get("returncode") not in (None, 0):
@@ -99,9 +116,10 @@ def hints(snapshot: dict) -> list[str]:
             transcode.get("encoded_seconds", 0) > 10
             and 0 < transcode.get("speed", 0) < 1
             and transcode.get("returncode") is None
+            and not transcode.get("resting")
         ):
             messages.append(
-                "Conversão abaixo de 1×: pode faltar buffer. Tente 720p ou uma CPU mais rápida."
+                "Conversão abaixo de 1×: pode faltar reserva. Tente GPU automática ou 720p."
             )
     return messages
 

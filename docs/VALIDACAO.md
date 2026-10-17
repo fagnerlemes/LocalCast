@@ -1,3 +1,5 @@
+> Este registro corresponde à versão estável 0.1.0. A cópia atual é 0.1.1; veja [a validação da 0.1.1](VALIDACAO-0.1.1.md).
+
 # Validação — LocalCast 0.1.0
 
 Publicação preparada em **14/10/2026**, no Windows x64. By Fagner Lemes.

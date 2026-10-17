@@ -12,13 +12,14 @@ from localcast.session import PlaybackSession
 class FakeJob:
     jobs = []
 
-    def __init__(self, info, root, offset, height, subtitle=None):
+    def __init__(self, info, root, offset, height, subtitle=None, **options):
         self.directory = root / f"job-{len(self.jobs)}"
         self.directory.mkdir(parents=True)
         self.offset = offset
         self.closed = False
         self.info = info
         self.subtitle = subtitle
+        self.options = options
         self.jobs.append(self)
 
     def wait_ready(self):
@@ -29,6 +30,37 @@ class FakeJob:
 
     def close(self):
         self.closed = True
+
+
+def test_movie_artwork_survives_seek_tracks_and_is_revoked_on_stop(track_info, monkeypatch, tmp_path):
+    monkeypatch.setenv('LOCALCAST_DATA_DIR', str(tmp_path / 'data'))
+    monkeypatch.setattr('localcast.session.HlsJob', FakeJob)
+    FakeJob.jobs = []
+    client = Mock()
+    client.snapshot.return_value = {'player_state': 'PAUSED', 'current_time': 3}
+    session = PlaybackSession(0, client)
+    device = Device('u', 'TV', '192.168.1.50', 'cast')
+    cover = b'\xff\xd8\xffcover'
+    try:
+        session.start(track_info, device, advertised_ip='192.168.1.10',
+                      display_title='Filme identificado', cover=cover)
+        token, cover_url = session.cover_token, session.cover_url
+        assert session.server.resolve([token, 'cover']) == (cover, 'image/jpeg')
+        session.seek(50)
+        session.set_tracks(4, 7)
+        for call in client.load.call_args_list:
+            assert call.args[2] == 'Filme identificado'
+            assert call.kwargs['cover_url'] == cover_url
+            assert call.kwargs['duration'] == track_info.duration
+        assert session.server.resolve([token, 'cover']) == (cover, 'image/jpeg')
+        session.stop()
+        assert session.server.resolve([token, 'cover']) is None
+        assert session.cover_url is None and not session.server._resources
+        session.start(track_info, device, advertised_ip='192.168.1.10', cover=b'invalid')
+        assert client.load.call_args.kwargs['cover_url'] is None
+        assert client.load.call_args.args[2] == track_info.path.name
+    finally:
+        session.close()
 
 
 def test_hls_seek_restores_pause_and_source_position(media_info, monkeypatch, tmp_path):
@@ -177,7 +209,8 @@ def test_original_serves_unchanged_bytes_without_encoder(track_info, monkeypatch
     try:
         assert session.mode == "original" and session.job is None
         assert session.info is info and session.subtitle is None
-        client.load.assert_called_once_with(session.url, mime, path.name, hls=False)
+        client.load.assert_called_once_with(session.url, mime, path.name, hls=False,
+                                            cover_url=None, duration=info.duration)
         assert session.url.endswith("media" + extension)
         connection = http.client.HTTPConnection("127.0.0.1", session.server.port, timeout=5)
         try:

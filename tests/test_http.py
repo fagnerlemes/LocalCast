@@ -103,3 +103,21 @@ def test_concurrent_requests_and_empty_file(server, tmp_path):
     path.write_bytes(b"")
     assert request(server, f"/{token}/media.mp4")[2] == b""
     assert request(server, f"/{token}/media.mp4", headers={"Range": "bytes=0-"})[0] == 416
+
+
+@pytest.mark.parametrize('data,mime', [(b'\xff\xd8\xffposter', 'image/jpeg'),
+                                      (b'\x89PNG\r\n\x1a\nposter', 'image/png')])
+def test_cover_bytes_transport_and_revocation(server, data, mime):
+    token = server.register_image(data)
+    path = f'/{token}/cover'
+    status, headers, body = request(server, path)
+    assert status == 200 and body == data and headers['Content-Type'] == mime
+    assert headers['Access-Control-Allow-Origin'] == '*'
+    assert request(server, path, 'HEAD')[2] == b''
+    assert request(server, path, headers={'Range': 'bytes=0-2'})[2] == data[:3]
+    assert request(server, f'/{token}/other')[0] == 404
+    server.unregister(token)
+    assert request(server, path)[0] == 404
+    for invalid in (b'', b'<html>error</html>', b'\xff\xd8\xff' + b'x' * (6 * 1024 * 1024)):
+        with pytest.raises(ValueError):
+            server.register_image(invalid)

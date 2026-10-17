@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSlider,
@@ -70,8 +71,8 @@ def build_ui(self):
     brand.addWidget(label("Vídeos locais no seu Chromecast", "muted"))
     header.addLayout(brand)
     header.addStretch()
-    self.movie_settings_button = QPushButton("Configurar filmes")
-    self.movie_settings_button.clicked.connect(self.configure_movies)
+    self.movie_settings_button = QPushButton("Configurações")
+    self.movie_settings_button.clicked.connect(self.configure_settings)
     header.addWidget(self.movie_settings_button)
     layout.addLayout(header)
 
@@ -133,6 +134,8 @@ def build_ui(self):
     column.addWidget(device)
 
     file_card, content = card("Arquivo")
+    self.file_card = file_card
+    file_card.installEventFilter(self)
     row = QHBoxLayout()
     file_heading = content.itemAt(0).widget()
     content.removeWidget(file_heading)
@@ -141,11 +144,29 @@ def build_ui(self):
     self.file_label = label("Nenhum arquivo selecionado", "", True)
     row.addWidget(file_heading, 1)
     row.addWidget(self.open_button)
+    self.drop_hint = label('ou arraste e solte', 'muted')
+    row.addWidget(self.drop_hint)
     content.addLayout(row)
     content.addWidget(self.file_label)
     self.media_label = label("Escolha um vídeo para transmitir pela sua rede.", "muted", True)
     content.addWidget(self.media_label)
+    self.resume_label = label('', 'resumeHint')
+    self.resume_label.setAccessibleName('Posição salva para continuar')
+    self.resume_bar = QProgressBar()
+    self.resume_bar.setRange(0, 1000)
+    self.resume_bar.setTextVisible(False)
+    self.resume_bar.setFixedHeight(5)
+    self.resume_bar.setAccessibleName('Progresso salvo do vídeo')
+    content.addWidget(self.resume_label)
+    content.addWidget(self.resume_bar)
+    self.resume_label.hide()
+    self.resume_bar.hide()
     column.addWidget(file_card)
+    self.drop_overlay = label('Solte aqui para abrir o vídeo', 'dropOverlay')
+    self.drop_overlay.setParent(file_card)
+    self.drop_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    self.drop_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    self.drop_overlay.hide()
 
     options, content = card("Conversão e faixas")
     form = QFormLayout()
@@ -174,12 +195,50 @@ def build_ui(self):
     form.addRow("&Conversão", self.resolution)
     form.addRow("&Áudio", self.audio_box)
     form.addRow("&Legenda", self.subtitle_box)
+    self.encoder_box = DarkComboBox()
+    self.encoder_box.addItem("Automático — GPU quando disponível", "auto")
+    self.encoder_box.addItem("CPU — compatibilidade", "cpu")
+    self.encoder_box.setMinimumContentsLength(20)
+    self.encoder_box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    self.encoder_box.setAccessibleName("Processamento da conversão")
+    self.encoder_box.setToolTip("Tenta a GPU e retorna à CPU se o início da conversão falhar.")
+    self.ahead_seconds = DarkSpinBox()
+    self.ahead_seconds.setRange(30, 300)
+    self.ahead_seconds.setSingleStep(30)
+    self.ahead_seconds.setValue(90)
+    self.ahead_seconds.setSuffix(" s")
+    self.ahead_seconds.setAccessibleName("Reserva de vídeo adiantado")
+    self.ahead_seconds.setToolTip(
+        "Prepara aproximadamente esta reserva. Descansa ao atingir o alvo e retoma na metade. "
+        "A mudança vale na próxima transmissão. Rede ou conversão lenta ainda podem causar pausas."
+    )
     content.addLayout(form)
     self.force_hls = QCheckBox("Forçar HLS, inclusive em MP4 compatível")
     self.force_hls.setToolTip(
         "Mantém o teste de compatibilidade HLS. Original envia sem conversão."
     )
     content.addWidget(self.force_hls)
+    self.performance_toggle = QToolButton()
+    self.performance_toggle.setObjectName("disclosure")
+    self.performance_toggle.setText("Desempenho e reserva")
+    self.performance_toggle.setCheckable(True)
+    self.performance_toggle.setArrowType(Qt.ArrowType.RightArrow)
+    self.performance_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+    self.performance_toggle.setToolTip("Padrão: GPU automática e reserva de 90 segundos.")
+    content.addWidget(self.performance_toggle, 0, Qt.AlignmentFlag.AlignLeft)
+    self.performance_fields = QWidget()
+    performance_form = QFormLayout(self.performance_fields)
+    performance_form.setContentsMargins(0, 0, 0, 0)
+    performance_form.addRow("&Processamento", self.encoder_box)
+    performance_form.addRow("&Reserva adiantada", self.ahead_seconds)
+    content.addWidget(self.performance_fields)
+    self.performance_fields.hide()
+    self.performance_toggle.toggled.connect(self.performance_fields.setVisible)
+    self.performance_toggle.toggled.connect(
+        lambda checked: self.performance_toggle.setArrowType(
+            Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow
+        )
+    )
     self.conversion_hint = label("", "muted", True)
     content.addWidget(self.conversion_hint)
     self.tracks_hint = label("Escolha as faixas antes de transmitir.", "muted", True)
@@ -195,7 +254,8 @@ def build_ui(self):
     self.resolution.currentIndexChanged.connect(self._conversion_changed)
     column.addWidget(options)
     column.addStretch()
-    middle.addWidget(scroller(controls), 6)
+    self.controls_scroll = scroller(controls)
+    middle.addWidget(self.controls_scroll, 6)
     self.movie_panel = MoviePanel()
     self.movie_panel.setMinimumWidth(350)
     self.movie_panel.configure_requested.connect(self.configure_movies)
@@ -220,6 +280,14 @@ def build_ui(self):
     self.cast_button.setObjectName("primary")
     self.cast_button.setMinimumWidth(124)
     self.cast_button.clicked.connect(self.cast_file)
+    self.restart_button = QToolButton()
+    self.restart_button.setObjectName('restart')
+    self.restart_button.setText('↺')
+    self.restart_button.setFixedSize(36, 36)
+    self.restart_button.setToolTip('Começar do início')
+    self.restart_button.setAccessibleName('Começar do início')
+    self.restart_button.clicked.connect(lambda: self.cast_file(restart=True))
+    self.restart_button.hide()
     self.play_button = QPushButton("Play")
     self.pause_button = QPushButton("Pause")
     self.stop_button = QPushButton("Parar")
@@ -231,6 +299,7 @@ def build_ui(self):
     self.disconnect_button.clicked.connect(lambda: self.task("disconnect", self.session.disconnect))
     for button in (
         self.cast_button,
+        self.restart_button,
         self.play_button,
         self.pause_button,
         self.stop_button,
@@ -250,7 +319,26 @@ def build_ui(self):
     row.addWidget(self.seek_button)
     content.addLayout(row)
     self.state_label = label("Pronto", "muted", True)
-    content.addWidget(self.state_label)
+    status_row = QHBoxLayout()
+    status_row.setSpacing(14)
+    status_row.addWidget(self.state_label, 1)
+    self.volume_caption = label('Volume', 'muted')
+    status_row.addWidget(self.volume_caption)
+    self.volume_slider = QSlider(Qt.Orientation.Horizontal)
+    self.volume_slider.setRange(0, 100)
+    self.volume_slider.setFixedWidth(120)
+    self.volume_slider.setMinimumHeight(24)
+    self.volume_slider.setPageStep(5)
+    self.volume_slider.setAccessibleName('Volume do Chromecast')
+    self.volume_slider.setToolTip('Volume próprio do Chromecast. Use as setas para ajustar.')
+    self.volume_slider.valueChanged.connect(self._queue_volume)
+    self.volume_slider.sliderReleased.connect(self._flush_volume)
+    status_row.addWidget(self.volume_slider)
+    self.volume_value = label('—', 'muted')
+    self.volume_value.setFixedWidth(38)
+    self.volume_value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+    status_row.addWidget(self.volume_value)
+    content.addLayout(status_row)
     layout.addWidget(player)
 
     self.debug_toggle = QToolButton()

@@ -20,6 +20,14 @@ QLabel#brandLogo { background: transparent; padding: 0; }
 QLabel#sectionTitle { font-size: 16px; font-weight: 600; }
 QLabel#movieTitle { font-size: 24px; font-weight: 700; }
 QLabel#muted { color: #aeb3bd; font-size: 12px; }
+QLabel#resumeHint { color: #e3c15a; font-size: 12px; }
+QFrame#card[dropActive="true"] { border-color: #f5c518; background: #292718; }
+QLabel#dropOverlay { background: #292718; color: #ffe17a; border-radius: 14px; font-size: 15px; font-weight: 600; }
+QProgressBar { background: #34383f; border: none; border-radius: 2px; }
+QProgressBar::chunk { background: #f5c518; border-radius: 2px; }
+QPushButton#danger { color: #ffb6af; border-color: #79534f; }
+QPushButton#danger:disabled { color: #727986; border-color: #30343c; }
+QToolButton#restart { padding: 0; font-size: 22px; }
 QLabel#rating { color: #f5c518; font-size: 22px; font-weight: 700; }
 QLabel#signature { color: #d2d5dc; font-size: 12px; font-weight: 600; }
 QLabel#badge { color: #c6cbd4; background: #262930; border-radius: 6px; padding: 5px 9px; font-size: 11px; }
@@ -55,6 +63,7 @@ QSlider::groove:horizontal { height: 5px; background: #414650; border-radius: 2p
 QSlider::sub-page:horizontal { background: #f5c518; border-radius: 2px; }
 QSlider::handle:horizontal { background: #f5c518; border: 2px solid #f5c518; width: 12px; margin: -5px 0; border-radius: 7px; }
 QSlider::handle:horizontal:hover { background: #ffdf72; border-color: #ffdf72; }
+QSlider::handle:horizontal:focus { border-color: #fff1ae; }
 QSlider::groove:horizontal:disabled { background: #34383f; }
 QSlider::handle:horizontal:disabled { background: #6b717d; border-color: #6b717d; }
 QScrollBar:vertical { background: #15171a; width: 9px; margin: 0; border: none; }

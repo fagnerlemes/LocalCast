@@ -17,6 +17,7 @@ from PySide6.QtCore import QObject, Signal
 
 from . import __version__
 from .paths import data_dir
+from .storage import atomic_json
 
 
 class MovieLookupError(Exception):
@@ -131,6 +132,8 @@ class MovieStore:
         self.root = root or data_dir()
         self.config_path = self.root / "movie-settings.json"
         self.cache = self.root / "movie-cache"
+        self.lock = threading.RLock()
+        self.epoch = 0
 
     def settings(self):
         try:
@@ -146,9 +149,9 @@ class MovieStore:
         if key and not re.fullmatch(r"[A-Za-z0-9_-]{4,128}", key):
             raise ValueError("Informe apenas a chave recebida do OMDb, sem URL ou espaços.")
         self.root.mkdir(parents=True, exist_ok=True)
-        self.config_path.write_text(
-            json.dumps({"key": key, "automatic": automatic}), encoding="utf-8"
-        )
+        with self.lock:
+            self.epoch += 1
+            atomic_json(self.config_path, {"key": key, "automatic": automatic})
 
     def cache_path(self, query: MovieQuery):
         identity = f"{query.title.casefold()}|{query.year}|{query.imdb_id}"
@@ -196,7 +199,9 @@ class MovieClient:
         except MovieLookupError:
             return b""
 
-    def lookup(self, query: MovieQuery, key: str, refresh=False) -> MovieResult:
+    def lookup(self, query: MovieQuery, key: str, refresh=False, cache_epoch=None) -> MovieResult:
+        with self.store.lock:
+            epoch = self.store.epoch if cache_epoch is None else cache_epoch
         if not key:
             raise MovieLookupError(
                 "Configure sua chave gratuita OMDb para buscar capa, notas e elenco."
@@ -234,11 +239,11 @@ class MovieClient:
         details = parse_details(raw)
         poster = self._poster(details.poster_url)
         try:
-            cached_path.parent.mkdir(parents=True, exist_ok=True)
-            cached_path.write_text(
-                json.dumps(asdict(details), ensure_ascii=False), encoding="utf-8"
-            )
-            poster_path.write_bytes(poster)
+            with self.store.lock:
+                if epoch == self.store.epoch:
+                    cached_path.parent.mkdir(parents=True, exist_ok=True)
+                    atomic_json(cached_path, asdict(details))
+                    poster_path.write_bytes(poster)
         except OSError:
             pass  # A cache error must not hide metadata already received.
         return MovieResult(details, poster)
@@ -257,7 +262,7 @@ class MovieWorker(QObject):
         self.thread.start()
 
     def submit(self, generation: int, query: MovieQuery, key: str, refresh=False):
-        self.commands.put((generation, query, key, refresh))
+        self.commands.put((generation, query, key, refresh, self.client.store.epoch))
 
     def close(self):
         self.closed.set()
@@ -273,9 +278,11 @@ class MovieWorker(QObject):
                 command = self.commands.get()
                 if command is None:
                     return
-            generation, query, key, refresh = command
+            generation, query, key, refresh, epoch = command
+            if epoch != self.client.store.epoch:
+                continue
             try:
-                result = self.client.lookup(query, key, refresh)
+                result = self.client.lookup(query, key, refresh, cache_epoch=epoch)
                 if not self.closed.is_set():
                     self.finished.emit(generation, result)
             except Exception:

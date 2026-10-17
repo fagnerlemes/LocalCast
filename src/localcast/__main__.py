@@ -16,11 +16,22 @@ def main():
     parser.add_argument(
         "--diagnose", action="store_true", help="Verifica dependências, sem buscar TV"
     )
-    parser.add_argument("--port", type=int, default=8765, help="Porta HTTP LAN (padrão: 8765)")
+    parser.add_argument("--port", type=int, default=8767, help="Porta HTTP LAN (padrão: 8767)")
     parser.add_argument("--smoke-test", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("porta deve estar entre 1 e 65535")
+    from .paths import data_dir
+    from .storage import ProfileLease
+
+    lease = ProfileLease(data_dir())
+    try:
+        return run(args)
+    finally:
+        lease.close()
+
+
+def run(args):
     configure_logging()
     if args.diagnose:
         report = environment_report()

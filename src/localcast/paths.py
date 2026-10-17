@@ -9,18 +9,12 @@ from pathlib import Path
 
 def data_dir() -> Path:
     override = os.environ.get("LOCALCAST_DATA_DIR")
-    project_root = Path(__file__).resolve().parents[2]
-    portable = Path(sys.executable).resolve().parent == project_root / "runtime" / "python"
-    if getattr(sys, "frozen", False):
-        executable_root = Path(sys.executable).resolve().parent
-        if (executable_root / "localcast-data").is_dir():
-            project_root, portable = executable_root, True
     if override:
-        base = Path(override)
-    elif portable:
-        base = project_root / "localcast-data"
+        base = Path(override).expanduser().absolute()
+    elif not getattr(sys, "frozen", False):
+        base = Path(__file__).resolve().parents[2] / "localcast-dev-data"
     else:
-        base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "LocalCastMVP"
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "LocalCast"
     base.mkdir(parents=True, exist_ok=True)
     return base
 

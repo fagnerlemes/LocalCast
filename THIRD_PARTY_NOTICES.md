@@ -5,6 +5,10 @@ substitui as condições de dependências, marcas e imagens.
 
 ## Software
 
+- **psutil 7.2.2**, Giampaolo Rodola e colaboradores: gerenciamento do processo
+  FFmpeg criado pelo próprio app. Licença original em `licenses/python-packages/`.
+  <https://github.com/giampaolo/psutil>.
+
 - **Python / CPython**, Python Software Foundation: PSF e avisos em
   `licenses/python/`. Fonte: <https://www.python.org/>.
 - **PySide6 / Qt e Shiboken**, The Qt Company e colaboradores: componentes Qt

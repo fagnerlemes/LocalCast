@@ -36,7 +36,7 @@ a = Analysis(
     binaries=binaries,
     datas=[(str(root / 'assets'), 'assets'), (str(root / 'LICENSE'), '.'),
            (str(root / 'THIRD_PARTY_NOTICES.md'), '.'), (str(root / 'licenses'), 'licenses')]
-          + copy_metadata('PyChromecast') + copy_metadata('PySide6-Essentials'),
+          + copy_metadata('PyChromecast') + copy_metadata('PySide6-Essentials') + copy_metadata('psutil'),
     hiddenimports=collect_submodules('pychromecast.controllers'),
     excludes=['PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets', 'PySide6.QtPdf', 'PySide6.QtPdfWidgets'],
 )

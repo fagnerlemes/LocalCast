@@ -1,0 +1,71 @@
+{
+  "version": "0.2.0",
+  "build": "020-patch01",
+  "date": "2026-10-16",
+  "status": "local-delivery-no-public-release",
+  "author": "Fagner Lemes",
+  "base_source_commit": "592905bda41c1ea38f445c03ddd2e201da5c168e",
+  "patch": {
+    "file": "LocalCast-Patch-0.2.0-01.exe",
+    "size_bytes": 7682150,
+    "sha256": "06a2fcc3362726abb3c7315efedebe5eb207dffef892171f65d9a1586dfba7fc"
+  },
+  "full_installer": {
+    "file": "LocalCast-Setup-0.2.0-patch01.exe",
+    "size_bytes": 96154385,
+    "sha256": "5238c497e224f3ec744f9f2de5f68cf9f4bd1eb8f4571040f00a6f8db1426b19"
+  },
+  "application": {
+    "file": "LocalCast.exe",
+    "size_bytes": 5494934,
+    "sha256": "979709fc2ba1f8f5ab5292fa3f621d4ab5c48221faa8345fde32104bfa79f31a"
+  },
+  "changed_files": {
+    "_internal/base_library.zip": {
+      "before": "d546d6747186aca0f36f0699971f30dbde0cc817b2d138ff4fb0abe7050edd5c",
+      "after": "6773879aba97e1397a4a1915a0d71e02d2d3dff8acbae66ff5ef5d298d78a967"
+    },
+    "LocalCast.exe": {
+      "before": "2b44c4b70e54eda1492b45e4f12cd05d002b598085d0cae9660c27443f23a506",
+      "after": "979709fc2ba1f8f5ab5292fa3f621d4ab5c48221faa8345fde32104bfa79f31a"
+    }
+  },
+  "payload_bytes": 6798861,
+  "components": {
+    "python": "3.15.0",
+    "PySide6": "6.12.0",
+    "PyChromecast": "14.0.10",
+    "psutil": "7.2.2",
+    "ffmpeg": "9.0.2",
+    "PyInstaller": "6.22.3",
+    "InnoSetup": "6.7.3"
+  },
+  "tests": {
+    "automated": "127 passed, 18 deselected in 25.88s",
+    "suite_python": "3.12.14",
+    "ruff": "E4,E7,E9,F,I passed",
+    "conversion_integration": "not rerun; FFmpeg pipeline unchanged",
+    "isolated_installer_validation": {
+      "patch_applied": true,
+      "reapplication": true,
+      "rejects_wrong_base_before_writing": true,
+      "rejects_missing_installation": true,
+      "rejects_running_app": true,
+      "history_and_settings_preserved": true,
+      "original_uninstaller_preserved_and_working": true,
+      "users_running_executable_unchanged": true,
+      "physical_cast_tested": false
+    },
+    "native_windows_smoke": true,
+    "bundled_ffmpeg_ffprobe_ok": true,
+    "physical_chromecast": false,
+    "phone_controller": false
+  },
+  "limitations": [
+    "Growing HLS remains LIVE; total duration is sent as metadata subtitle, not a replacement timeline.",
+    "Movie cover must be available when playback starts; display depends on receiver/controller.",
+    "Static standby image uses the existing paused video as a compatibility fallback."
+  ],
+  "personal_api_key_included": false,
+  "application_codesigned": false
+}

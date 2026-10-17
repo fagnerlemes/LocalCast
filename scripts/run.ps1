@@ -1,4 +1,4 @@
-﻿param([int]$Port = 8765, [switch]$Diagnose, [switch]$Console)
+﻿param([int]$Port = 8767, [switch]$Diagnose, [switch]$Console)
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $taskRoot

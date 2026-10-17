@@ -24,5 +24,8 @@ Um HTTP 200 apenas prova que o servidor entregou bytes. Um estado PLAYING recebi
 
 HEVC é um limite de codec do Chromecast 2: trocar MKV por MP4 sem converter vídeo não o resolve. EAC3 pode depender de passthrough/TV/receiver; este MVP evita essa dependência convertendo a AAC estéreo. MKV não é usado como contêiner direto no receiver. HLS/MPEG-TS com H.264/AAC é uma escolha conservadora a testar no aparelho, não uma garantia baseada apenas na documentação de plataforma.
 
-Na versão portátil, logs/cache ficam em `localcast-data\logs` e `localcast-data\cache` dentro da pasta do app. No desenvolvimento, a raiz padrão é `%LOCALAPPDATA%\LocalCastMVP`. Pode mudar a raiz com `LOCALCAST_DATA_DIR` antes de iniciar. O diagnóstico inclui índices de áudio/legenda e offset da sessão. O aplicativo não configura firewall, roteador ou TV automaticamente.
+Na versão instalada 0.2.0, logs/cache ficam em `%LOCALAPPDATA%\LocalCast`; no fonte,
+em `localcast-dev-data` na pasta do projeto. Pode mudar a raiz com `LOCALCAST_DATA_DIR`
+antes de iniciar. O diagnóstico inclui faixas, offset, GPU/reserva e avisos de
+histórico. O aplicativo não configura firewall, roteador ou TV automaticamente.
 
