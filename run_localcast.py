@@ -12,7 +12,7 @@ def startup_error(exc):
 
         directory = data_dir() / "logs"
     except Exception:
-        root = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "LocalCastMVP"
+        root = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "LocalCast"
         directory = Path(os.environ.get("LOCALCAST_DATA_DIR", root)) / "logs"
     detail = traceback.format_exc()
     log = directory / "startup.log"

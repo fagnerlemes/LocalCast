@@ -32,15 +32,15 @@ def test_standby_transport_movie_transition_stop_and_disconnect(media_info, monk
         assert snapshot["total_duration"] == 0 and session.info is None
         url = urlsplit(session.url)
         token = session.token
-        assert url.hostname == "192.168.1.10" and url.path.endswith("/media.mp4")
-        client.load.assert_called_once_with(session.url, "video/mp4", "LocalCast • By Fagner Lemes")
-        client.command.assert_called_once_with("pause")
+        assert url.hostname == "192.168.1.10" and url.path.endswith("/media.jpg")
+        client.load.assert_called_once_with(session.url, "image/jpeg", "LocalCast • By Fagner Lemes", image=True)
+        client.command.assert_not_called()
         connection = http.client.HTTPConnection("127.0.0.1", session.server.port, timeout=5)
         try:
             connection.request("GET", url.path, headers={"Range": "bytes=0-63"})
             response = connection.getresponse()
-            assert response.status == 206 and response.getheader("Content-Type") == "video/mp4"
-            assert response.read() == asset_path("localcast-espera.mp4").read_bytes()[:64]
+            assert response.status == 206 and response.getheader("Content-Type") == "image/jpeg"
+            assert response.read() == asset_path("localcast-espera-1280x720.jpg").read_bytes()[:64]
         finally:
             connection.close()
         session.start(media_info, DEVICE, advertised_ip="192.168.1.10")
@@ -49,7 +49,7 @@ def test_standby_transport_movie_transition_stop_and_disconnect(media_info, monk
         assert client.load.call_args.args[2] == media_info.path.name
         session.stop_to_standby()
         assert session.mode is None and session.standby_active and session.job is None
-        assert client.command.call_args.args == ("pause",)
+        assert session.standby_format == 'image'
         encoder.assert_not_called()
         server = session.server
         session.disconnect()
@@ -66,6 +66,8 @@ def test_failed_standby_releases_media_and_can_disconnect(failed_command):
     if failed_command == "load":
         client.load.side_effect = RuntimeError("standby load rejected")
     else:
+        client.load.side_effect = lambda *args, **kwargs: (
+            (_ for _ in ()).throw(RuntimeError('photo rejected')) if kwargs.get('image') else None)
         client.command.side_effect = lambda name: (
             (_ for _ in ()).throw(RuntimeError("pause not confirmed")) if name == "pause" else None
         )
@@ -102,3 +104,35 @@ def test_packaged_standby_is_silent_compatible_h264(tools):
     assert (info.width, info.height) == (1280, 720) and info.fps == 1
     assert info.pixel_format == "yuv420p" and not info.audio_tracks
     assert info.duration >= 30 and info.direct_ok
+
+
+def test_stop_without_initial_standby_reconnects_and_loads_image(media_info):
+    client = client_mock()
+    session = PlaybackSession(0, client)
+    try:
+        session.start(media_info, DEVICE, advertised_ip='192.168.1.10')
+        client.snapshot.return_value['connected'] = False  # Transient status after STOP.
+        client.command.reset_mock()
+        session.stop_to_standby()
+        assert session.standby_format == 'image' and session.standby_active
+        assert client.connect.call_count == 2
+        client.command.assert_called_once_with('stop')
+        assert client.load.call_args.kwargs['image']
+    finally:
+        session.close()
+
+
+def test_photo_rejection_falls_back_without_starting_encoder():
+    client = client_mock()
+    def load(url, mime, title, **kwargs):
+        if mime == 'image/jpeg':
+            raise RuntimeError('photo unsupported')
+    client.load.side_effect = load
+    session = PlaybackSession(0, client)
+    try:
+        session.show_standby(DEVICE, '192.168.1.10')
+        assert session.standby_format == 'video-fallback' and session.job is None
+        assert len(session.server._resources) == 1
+        client.command.assert_called_once_with('pause')
+    finally:
+        session.close()

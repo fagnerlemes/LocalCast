@@ -17,8 +17,13 @@ dist/
 *.bak
 *.egg-info/
 tools/*.exe
+tools/FFmpeg-*
 samples/
 localcast-data/
+localcast-dev-data/
+*.db
+*.db-*
+.installer-tools/
 runtime/
 .env
 .env.*

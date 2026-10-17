@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from urllib.request import urlopen
 
@@ -18,7 +19,10 @@ def run(command):
 
 @pytest.mark.integration
 @pytest.mark.parametrize("kind", ["mp4", "mkv-hevc", "mkv-4k", "mkv-hdr"])
-def test_real_ffmpeg_hls_output(tools, tmp_path, kind):
+@pytest.mark.parametrize("encoder_mode", ["cpu", "auto"])
+def test_real_ffmpeg_hls_output(tools, tmp_path, kind, encoder_mode):
+    if encoder_mode == "auto" and os.environ.get("LOCALCAST_TEST_GPU") != "1":
+        pytest.skip("GPU test explicitly enabled only on hardware test machine")
     ffmpeg, ffprobe = tools
     hevc = kind != "mp4"
     size = "3840x2160" if kind == "mkv-4k" else "640x360"
@@ -65,13 +69,16 @@ def test_real_ffmpeg_hls_output(tools, tmp_path, kind):
     if hevc:
         assert info.video_codec == "hevc" and info.audio_codec == "eac3" and info.channels == 6
         assert not info.direct_ok
-    job = HlsJob(info, tmp_path / "cache", ffmpeg=ffmpeg)
+    job = HlsJob(info, tmp_path / "cache", ffmpeg=ffmpeg, encoder_mode=encoder_mode)
     server = MediaServer("127.0.0.1", 0)
     directory = job.directory
     try:
         job.wait_ready(timeout=90)
         job.wait_finished(timeout=90)
         assert job.process.returncode == 0, job.snapshot()
+        if encoder_mode == "auto":
+            assert job.snapshot()["hardware"], job.snapshot()
+            assert job.plan.cuda_decode, job.snapshot()
         playlist = (directory / "stream.m3u8").read_text()
         assert "#EXT-X-PLAYLIST-TYPE:EVENT" in playlist and "#EXT-X-ENDLIST" in playlist
         segments = [line for line in playlist.splitlines() if line.endswith(".ts")]

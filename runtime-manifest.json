@@ -91,6 +91,13 @@
       "filename": "zeroconf-0.151.5-cp315-cp315-win_amd64.whl",
       "url": "https://files.pythonhosted.org/packages/cf/bf/d0cdb84ac3372388bc4ec6f2c2007e41ec687ec4e716da20f70fb5865dbb/zeroconf-0.151.5-cp315-cp315-win_amd64.whl",
       "sha256": "1ab36f829be85f6546476be525463879e11ce67c6eb18d0b01b1c2b989ba35d0"
+    },
+    {
+      "name": "psutil",
+      "version": "7.2.2",
+      "filename": "psutil-7.2.2-cp37-abi3-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/b4/90/e2159492b5426be0c1fef7acba807a03511f97c5f86b3caeda6ad92351a7/psutil-7.2.2-cp37-abi3-win_amd64.whl",
+      "sha256": "eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988"
     }
   ],
   "sources": {

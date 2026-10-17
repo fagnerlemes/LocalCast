@@ -30,6 +30,11 @@ def test_gui_startup_tracks_and_async_shutdown(monkeypatch, tmp_path, track_info
     window._done("discover", [Device("fake", "TV de teste", "192.168.1.50", "cast")])
     assert window.connect_button.isEnabled() and not window.cast_button.isEnabled()
     assert window.debug_panel.isHidden() and not window.debug_toggle.isChecked()
+    assert window.performance_fields.isHidden()
+    assert window.encoder_box.currentData() == "auto" and window.ahead_seconds.value() == 90
+    window.performance_toggle.click()
+    assert window.performance_fields.isVisible()
+    window.performance_toggle.click()
     messages = window.notes.toPlainText()
     window.debug_toggle.click()
     app.processEvents()

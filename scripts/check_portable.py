@@ -16,6 +16,8 @@ def main():
         raise RuntimeError("Qt Widgets indisponível.")
     if not hasattr(import_module("pychromecast"), "get_chromecasts"):
         raise RuntimeError("PyChromecast indisponível.")
+    if not hasattr(import_module("psutil"), "Process"):
+        raise RuntimeError("Controle de processos indisponível.")
     root = Path(__file__).resolve().parents[1]
     if sys.version_info < (3, 11) or struct.calcsize("P") != 8:
         raise RuntimeError("Python portátil precisa ser 3.11+ de 64 bits.")

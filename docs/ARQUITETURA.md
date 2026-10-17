@@ -1,5 +1,9 @@
 # Arquitetura
 
+Estado atual da 0.2.0: [histórico, processos e armazenamento](VERSAO-0.2.0.md#arquitetura-e-limites).
+O empacotamento principal usa [instalador por usuário](EXECUTAVEL.md).
+
+
 `ui_assets.py` resolve logo, assinatura e tela de espera no código-fonte, na pasta portátil ou nos recursos do PyInstaller. **Conectar** chama `PlaybackSession.show_standby`: registra o MP4 estático empacotado, carrega no receiver e solicita pause. `standby_active` é independente do modo de reprodução, de modo que seek/faixas/Play não tratam a imagem como um filme aberto. **Parar** usa `stop_to_standby`; as rotinas internas de stop, troca de arquivo e desconexão continuam liberando tokens/processos sem reabrir a tela. O filme e a espera usam o mesmo servidor LAN; só o recurso registrado está acessível.
 
 ```text
@@ -22,15 +26,15 @@ Chromecast → MEDIA_STATUS / LOAD_FAILED → listener → snapshot → GUI
 
 `http_server.py` serve exclusivamente recursos registrados com token aleatório por sessão. Não expõe caminhos locais, listagem de pastas ou uploads. GET/HEAD suportam Range único, aberto e sufixo; múltiplos ranges são rejeitados com 416, sem multipart. OPTIONS e CORS habilitam o receiver. Playlists têm `no-store`; segmentos publicados pelo FFmpeg são imutáveis. `temp_file` impede servir segmentos parciais. O servidor escuta IPv4 em todas as interfaces; limite o acesso pelo firewall à LAN privada. Tokens reduzem exposição acidental, mas não equivalem a autenticação/HTTPS.
 
-`transcoder.py` usa subprocesso sem shell. Arquivos com espaços/acentos são argumentos independentes. HLS: playlist mestre de uma variante, media playlist EVENT, TS muxado, segmentos de ~4 s, keyframes alinhados, High/4.1, VBV 6 Mb/s com buffer 12 Mb, AAC 192 kb/s. Aguarda pelo menos dois segmentos (~8 s), ou segmento único com ENDLIST num vídeo curto, antes do LOAD. A largura de banda de 7.5 Mb/s na playlist inclui margem. Não oferece ABR; 720p é uma escolha manual. A saída retém todos os segmentos até o fim da sessão, sem criar um MP4 intermediário.
+`transcoder.py` usa subprocesso sem shell. Arquivos com espaços/acentos são argumentos independentes. HLS: playlist mestre de uma variante, media playlist EVENT, TS muxado, segmentos de ~4 s, keyframes alinhados, High/4.1, VBV 6 Mb/s com buffer 12 Mb, AAC 192 kb/s. Aguarda pelo menos três segmentos (~12 s), ou segmento único com ENDLIST num vídeo curto, antes do LOAD. A largura de banda de 7.5 Mb/s na playlist inclui margem. Não oferece ABR; 720p é uma escolha manual. A saída retém todos os segmentos até o fim da sessão, sem criar um MP4 intermediário.
 
 `session.py` gerencia a propriedade dos recursos. MP4 usa Cast seek nativo; HLS usa `-ss` antes de `-i`, novo processo, diretório e URL a cada seek. Assim é possível pedir uma posição não convertida ainda. Durante a troca, o receiver perde a sessão e recebe outra; esse custo é aceito no MVP. O relógio da UI soma o offset da origem ao relógio relativo informado pelo receiver.
 
 HLS em crescimento é carregado como `LIVE`, com `current_time=0`; ao terminar, FFmpeg publica ENDLIST. A TV pode mostrar duração/estado de live diferentes da UI. Essa combinação EVENT/LIVE precisa ser validada no Default Media Receiver do Chromecast 2 real. Se o mesmo MP4 direto funcionar e HLS falhar com HTTP 200, investigue formato do manifesto/segmento e comportamento do receiver antes de atribuir a falha à CPU ou ao MKV.
 
-`paths.py` resolve ferramentas em variável de ambiente, `tools`, área do PyInstaller ou PATH, e mantém dados graváveis em `%LOCALAPPDATA%\LocalCastMVP`. `diagnostics.py` exporta um snapshot e mantém logs rotacionados. URLs de mídia com token não são incluídas no relatório exportado.
+`paths.py` resolve ferramentas em variável de ambiente, `tools`, área do PyInstaller ou PATH, e mantém dados graváveis em `%LOCALAPPDATA%\LocalCast`. `diagnostics.py` exporta um snapshot e mantém logs rotacionados. URLs de mídia com token não são incluídas no relatório exportado.
 
-Na distribuição portátil, `runtime\python` contém Python oficial embeddable e dependências vendorizadas. O arquivo `python315._pth` usa caminhos relativos para a biblioteca padrão, `site-packages` e `src`, com isolamento dos pacotes globais. `iniciar.cmd` prefere esse runtime; não usa uma `.venv` copiada com caminhos absolutos. Os dados passam a `localcast-data` dentro da pasta, com a variável `LOCALCAST_DATA_DIR` disponível para sobrescrever o destino.
+Na distribuição portátil, `runtime\python` contém Python oficial embeddable e dependências vendorizadas. O arquivo `python315._pth` usa caminhos relativos para a biblioteca padrão, `site-packages` e `src`, com isolamento dos pacotes globais. `iniciar.cmd` prefere esse runtime; não usa uma `.venv` copiada com caminhos absolutos. No desenvolvimento 0.2.0, os dados passam a `localcast-dev-data` dentro da pasta, com a variável `LOCALCAST_DATA_DIR` disponível para sobrescrever o destino.
 
 `preparar.cmd` apenas confere importações quando o runtime privado existe. No código-fonte sem Python, oferece baixar a distribuição privada fixada em `runtime-manifest.json`. `install-portable.ps1` confere hashes de Python/PyPI, extrai em uma pasta provisória curta, valida importações e só depois ativa `runtime\python`. Pip não é incluído no runtime embeddable. Desenvolvimento e PyInstaller continuam usando uma instalação completa de Python e `.venv` separada.
 
@@ -58,5 +62,5 @@ No Windows, o HTTP copia o conteúdo de playlists pequenas para memória e fecha
 
 ## Evolução
 
-SRT externo; WebVTT separado com seleção nativa no receiver; encoder NVENC/QSV com detecção e fallback; cache limitado com geração de segmentos solicitados; cancelamento imediato durante probe/LOAD; receiver customizado se o default não aceitar o fluxo esperado; instalador e assinatura; persistência de configurações. O suporte depende do caminho contêiner → codec → firmware/receiver → TV/HDMI, não da extensão do arquivo sozinha.
+SRT externo; WebVTT separado com seleção nativa no receiver; cache limitado com geração de segmentos solicitados; cancelamento imediato durante probe/LOAD; receiver customizado se o default não aceitar o fluxo esperado; assinatura digital; ampliar persistência de preferências. O suporte depende do caminho contêiner → codec → firmware/receiver → TV/HDMI, não da extensão do arquivo sozinha.
 

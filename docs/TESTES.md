@@ -55,3 +55,13 @@ Ordem obrigatória para diagnóstico: **MP4 direto → mesmo MP4 HLS → MKV H.2
 
 Se HLS for rejeitado apesar de bytes/manifesto válidos, o MVP ainda não passou a aceitação do recurso de conversão naquele firmware. Próximo trabalho é ajustar HLS/LOAD, comparar variantes ou avaliar um receiver customizado. Não pressupor que um player no PC implica suporte na TV.
 
+
+## Aceitação adicional da 0.1.1 (pendente na TV)
+
+| Teste | Critério | Resultado |
+|---|---|---|
+| Mesmo arquivo em CPU e GPU automática | Registrar encoder e verificar imagem/som | Pendente |
+| Reserva padrão 90 s | Descanso próximo ao alvo e retomada próxima a 45 s, sem interrupção | Pendente |
+| Pausa por dois minutos | Reserva estabiliza e reprodução retoma corretamente | Pendente |
+| Seek e troca de faixas em GPU | Posição, idioma e legenda preservados | Pendente |
+| Fechar enquanto encoder descansa | Processo próprio termina e receiver sai | Pendente |

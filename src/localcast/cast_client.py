@@ -1,6 +1,7 @@
 """PyChromecast boundary. Network operations belong in the UI worker."""
 
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass
@@ -37,10 +38,12 @@ class _Listener:
             "supports_pause",
             "supports_seek",
             "playback_rate",
+            "media_session_id",
         )
         with self.owner._lock:
             self.owner._status = {field: getattr(status, field, None) for field in fields}
             self.owner._status_at = time.monotonic()
+            self.owner._status_serial += 1
 
     def load_media_failed(self, queue_item_id, error_code):
         if self.owner.cast is not self.cast:
@@ -60,6 +63,7 @@ class CastClient:
         self._lock = threading.RLock()
         self._status = {}
         self._status_at = time.monotonic()
+        self._status_serial = 0
         self._load_error = None
         self._listeners = {}
         self._owns_receiver = False
@@ -96,7 +100,8 @@ class CastClient:
         if not cast.socket_client.is_connected:
             raise ConnectionError("Chromecast não conectou. Verifique rede e TCP 8009.")
 
-    def load(self, url: str, mime: str, title: str, hls: bool = False, current_time: float = 0):
+    def load(self, url: str, mime: str, title: str, hls: bool = False, current_time: float = 0,
+             *, image: bool = False, cover_url: str | None = None, duration: float = 0):
         if not self.cast:
             raise RuntimeError("Conecte um Chromecast primeiro.")
         with self._lock:
@@ -105,15 +110,29 @@ class CastClient:
         controller = self.cast.media_controller
         self._owns_receiver = True
         # TS is the conventional Cast HLS format; physical receiver acceptance must be tested.
+        metadata = {'metadataType': 4 if image else 1, 'title': title}
+        if image or cover_url:
+            metadata['images'] = [{'url': url if image else cover_url}]
+        options = {'metadata': metadata}
+        if not image and math.isfinite(duration) and duration > 0:
+            seconds = int(duration)
+            metadata['subtitle'] = (
+                f'Duração total: {seconds // 3600:02d}:{seconds // 60 % 60:02d}:{seconds % 60:02d}'
+            )
+            if not hls:
+                options['media_info'] = {'duration': duration}
+            # A growing EVENT playlist is LIVE. A finite duration or premature ENDLIST
+            # does not turn it into complete VOD and can break playback/remote seeking.
         controller.play_media(
             url,
             mime,
             title=title,
             autoplay=True,
-            stream_type="LIVE" if hls else "BUFFERED",
+            stream_type="NONE" if image else "LIVE" if hls else "BUFFERED",
             current_time=current_time,
+            **options,
         )
-        deadline = time.monotonic() + 30
+        deadline = time.monotonic() + (10 if image else 30)
         while time.monotonic() < deadline:
             status = self.snapshot()
             if status.get("load_error"):
@@ -123,8 +142,11 @@ class CastClient:
                     raise RuntimeError("Receiver retornou IDLE/ERROR ao carregar a mídia.")
                 if status.get("player_state") in {"PLAYING", "PAUSED"}:
                     return
+                if image and status.get('player_state') == 'IDLE' and not status.get('idle_reason'):
+                    return  # Photos have no playback timeline on some receivers.
             time.sleep(0.1)
         raise TimeoutError(
+            "Receiver não confirmou a imagem em 10 s." if image else
             "Receiver não confirmou PLAYING/PAUSED em 30 s. Consulte HTTP, LOAD_FAILED e logs."
         )
 
@@ -139,23 +161,48 @@ class CastClient:
         else:
             raise ValueError("Comando desconhecido")
 
-    def snapshot(self) -> dict:
+    def reported_snapshot(self) -> dict:
         with self._lock:
             row = dict(self._status)
+            row["status_age_seconds"] = time.monotonic() - self._status_at
+            row["status_serial"] = self._status_serial
             row["load_error"] = self._load_error
-            if row.get("player_state") == "PLAYING":
-                row["current_time"] = (row.get("current_time") or 0) + (
-                    time.monotonic() - self._status_at
-                ) * (row.get("playback_rate") or 1)
-                if row.get("stream_type") != "LIVE" and row.get("duration"):
-                    row["current_time"] = min(row["current_time"], row["duration"])
         row["connected"] = bool(
             self.cast
             and self.cast.socket_client.is_connected
             and not getattr(self.cast.socket_client, "is_stopped", False)
         )
         row["app_id"] = self.cast.app_id if self.cast else None
+        receiver = getattr(self.cast, 'status', None) if row['connected'] else None
+        level = getattr(receiver, 'volume_level', None)
+        row['volume_level'] = level if isinstance(level, (int, float)) and math.isfinite(level) else None
+        row['volume_muted'] = bool(getattr(receiver, 'volume_muted', False))
         return row
+
+    def set_volume(self, percent, target):
+        """Device volume, independent of the media stream and of Windows volume."""
+        if not math.isfinite(percent) or not 0 <= percent <= 100:
+            raise ValueError('Volume deve estar entre 0 e 100%.')
+        if self.cast is not target or not target or not target.socket_client.is_connected:
+            raise ConnectionError('O Chromecast mudou ou foi desconectado. Ajuste o volume novamente.')
+        target.set_volume(percent / 100, timeout=5)
+        if percent > 0 and getattr(getattr(target, 'status', None), 'volume_muted', False):
+            target.set_volume_muted(False, timeout=5)
+        return percent
+
+    def snapshot(self) -> dict:
+        row = self.reported_snapshot()
+        if row.get("player_state") == "PLAYING":
+            row["current_time"] = (row.get("current_time") or 0) + (
+                row["status_age_seconds"] * (row.get("playback_rate") or 1)
+            )
+            if row.get("stream_type") != "LIVE" and row.get("duration"):
+                row["current_time"] = min(row["current_time"], row["duration"])
+        return row
+
+    def request_status(self):
+        if self.cast and self.cast.socket_client.is_connected:
+            self.cast.media_controller.update_status()
 
     def disconnect(self):
         # PyChromecast 14 has register_status_listener, but no unregister counterpart.

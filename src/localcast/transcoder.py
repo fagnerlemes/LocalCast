@@ -10,9 +10,15 @@ import time
 from collections import deque
 from pathlib import Path
 
+import psutil
+
+from .buffer_budget import BufferBudget
+from .encoders import CPU, EncoderPlan, encoder_plans, encoding_options
 from .file_io import read_shared_text
 from .media import MediaInfo, SubtitleTrack
 from .paths import process_options, tool_path
+from .process_guard import ProcessGuard
+from .storage import mark_session
 from .subtitles import bitmap_graph, text_filter
 
 LOG = logging.getLogger(__name__)
@@ -38,6 +44,8 @@ def build_command(
     max_height: int = 1080,
     ffmpeg: str | None = None,
     subtitle: SubtitleTrack | None = None,
+    plan: EncoderPlan = CPU,
+    paced: bool = False,
 ) -> list[str]:
     if max_height not in (720, 1080):
         raise ValueError("Resolução alvo deve ser 720 ou 1080.")
@@ -52,12 +60,16 @@ def build_command(
         "-loglevel",
         "warning",
         "-stats_period",
-        "1",
+        "0.25",
         "-progress",
         "pipe:1",
     ]
     if start:
         command += ["-ss", f"{start:.3f}"]
+    if paced:
+        command += ["-readrate", "4", "-readrate_initial_burst", "12", "-readrate_catchup", "4"]
+    if plan.cuda_decode:
+        command += ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"]
     if subtitle and subtitle.kind == "unsupported":
         raise ValueError("Formato de legenda não suportado.")
     bitmap = subtitle is not None and subtitle.kind == "bitmap"
@@ -65,6 +77,15 @@ def build_command(
     if info.audio_index is not None:
         command += ["-map", f"0:{info.audio_index}"]
     base = video_filter(info, max_height)
+    if plan.cuda_scale:
+        width = 1920 if max_height == 1080 else 1280
+        base = (
+            f"scale_cuda=w='min({width},iw)':h='min({max_height},ih)':"
+            "force_original_aspect_ratio=decrease:force_divisible_by=2:format=yuv420p,setsar=1"
+        )
+    elif plan.cuda_decode:
+        download_format = "p010le" if info.pixel_format in {"yuv420p10le", "p010le"} else "nv12"
+        base = f"hwdownload,format={download_format}," + base
     if bitmap:
         command += ["-filter_complex", bitmap_graph(info, subtitle, base)]
     else:
@@ -78,30 +99,21 @@ def build_command(
         "-1",
         "-r",
         f"{fps:.6f}",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "22",
+        *encoding_options(plan),
         "-profile:v",
         "high",
         "-level:v",
         "4.1",
         "-pix_fmt",
-        "yuv420p",
+        "cuda" if plan.cuda_scale else "yuv420p",
         "-maxrate",
         "6M",
         "-bufsize",
         "12M",
-        "-refs",
-        "3",
         "-g",
         str(round(fps * 4)),
         "-keyint_min",
         str(round(fps * 4)),
-        "-sc_threshold",
-        "0",
         "-force_key_frames",
         "expr:gte(t,n_forced*4)",
         "-c:a",
@@ -142,12 +154,33 @@ class HlsJob:
         max_height: int = 1080,
         ffmpeg: str | None = None,
         subtitle: SubtitleTrack | None = None,
+        encoder_mode: str = "cpu",
+        ahead_seconds: int = 0,
+        playback=None,
     ):
+        self.budget = BufferBudget(ahead_seconds) if ahead_seconds else None
+        self._playback = playback
+        self._ffmpeg = ffmpeg or tool_path("ffmpeg")
+        self._plans = encoder_plans(self._ffmpeg, encoder_mode, info, subtitle)
+        self._plan_index = 0
+        self.fallbacks = []
+        self._control_lock = threading.RLock()
+        self._restarting = False
+        self._suspended = False
+        self._controlled = None
+        self._paused_total = 0.0
+        self._pause_started = 0.0
+        self._published_seconds = 0.0
+        self._playlist_stamp = None
+        self.control_warning = None
+        self._threads = []
+        self._readers = []
         cache_root.mkdir(parents=True, exist_ok=True)
         if shutil.disk_usage(cache_root).free < 512 * 1024 * 1024:
             raise RuntimeError("Menos de 512 MB livres para cache HLS.")
         self.directory = Path(tempfile.mkdtemp(prefix="session-", dir=cache_root))
         self.info = info
+        self.max_height = max_height
         self.offset = start
         self.subtitle = subtitle
         self._lock = threading.Lock()
@@ -162,31 +195,52 @@ class HlsJob:
             encoding="ascii",
         )
         try:
-            self.command = build_command(info, self.directory, start, max_height, ffmpeg, subtitle)
-            self.process = subprocess.Popen(
-                self.command,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                **process_options(),
-            )
+            self._spawn()
         except Exception:
             shutil.rmtree(self.directory, ignore_errors=True)
             raise
-        self._threads = [
-            threading.Thread(target=self._read_progress, daemon=True),
-            threading.Thread(target=self._read_errors, daemon=True),
-            threading.Thread(target=self._guard_disk, daemon=True),
-        ]
-        for thread in self._threads:
+        for target in (self._guard_disk, self._governor):
+            thread = threading.Thread(target=target, daemon=True)
+            self._threads.append(thread)
             thread.start()
         LOG.info("HLS iniciado: offset=%.3f alvo=%sp", start, max_height)
 
-    def _read_progress(self):
-        for line in self.process.stdout:
+    def _spawn(self):
+        self.plan = self._plans[self._plan_index]
+        self.command = build_command(
+            self.info, self.directory, self.offset, self.max_height,
+            self._ffmpeg, self.subtitle, self.plan, paced=self.budget is not None,
+        )
+        self._run_started = time.monotonic()
+        self._guard = ProcessGuard()
+        self.process = self._guard.spawn(
+            self.command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+            **process_options(),
+        )
+        try:
+            mark_session(self.directory, self.process)
+        except Exception:
+            self._guard.close()
+            self.process.wait(timeout=5)
+            self.process.stdout.close()
+            self.process.stderr.close()
+            raise
+        try:
+            # This PID is obtained exclusively from our own Popen, never process enumeration.
+            self._controlled = psutil.Process(self.process.pid)
+            self._controlled.create_time()
+        except psutil.Error:
+            self._controlled = None
+        self._readers = [threading.Thread(target=target, args=(self.process,), daemon=True)
+                         for target in (self._read_progress, self._read_errors)]
+        self._threads.extend(self._readers)
+        for thread in self._readers:
+            thread.start()
+        LOG.info("Encoder iniciado: %s", self.plan.label)
+
+    def _read_progress(self, process):
+        for line in process.stdout:
             key, _, value = line.strip().partition("=")
             try:
                 with self._lock:
@@ -197,8 +251,8 @@ class HlsJob:
             except ValueError:
                 pass
 
-    def _read_errors(self):
-        for line in self.process.stderr:
+    def _read_errors(self, process):
+        for line in process.stderr:
             with self._lock:
                 self._tail.append(line.rstrip())
             LOG.warning("ffmpeg: %s", line.rstrip())
@@ -225,13 +279,132 @@ class HlsJob:
 
     def wait_finished(self, timeout=90):
         self.process.wait(timeout=timeout)
-        for thread in self._threads[:2]:
+        for thread in self._readers:
             thread.join(timeout=4)
+
+    def _suspend(self, suspended):
+        if suspended == self._suspended or self.process.poll() is not None:
+            return
+        if self._controlled is None:
+            raise RuntimeError("Controle do processo indisponível; conversão seguirá sem limite.")
+        if suspended:
+            self._controlled.suspend()
+            self._pause_started = time.monotonic()
+        else:
+            self._controlled.resume()
+            self._paused_total += time.monotonic() - self._pause_started
+        self._suspended = suspended
+        LOG.info("Conversão %s: reserva de %.1fs", "em descanso" if suspended else "retomada",
+                 self.budget.ahead if self.budget else 0)
+
+    def _published_duration(self):
+        path = self.directory / "stream.m3u8"
+        try:
+            stamp = path.stat().st_mtime_ns
+            if stamp == self._playlist_stamp:
+                return self._published_seconds
+            duration, pending = 0.0, 0.0
+            for line in read_shared_text(path).splitlines():
+                if line.startswith("#EXTINF:"):
+                    pending = float(line[8:].split(",")[0])
+                elif line and not line.startswith("#"):
+                    if Path(line).name != line or not (self.directory / line).is_file():
+                        break
+                    duration += max(0, pending)
+                    pending = 0.0
+            self._published_seconds = max(self._published_seconds, duration)
+            self._playlist_stamp = stamp
+        except (OSError, ValueError):
+            pass
+        return self._published_seconds
+
+    def _governor(self):
+        if not self.budget:
+            return
+        while not self._stop.wait(0.2):
+            with self._control_lock:
+                if self._restarting:
+                    continue
+                if self.process.poll() is not None:
+                    continue
+                if self.control_warning:
+                    continue
+                try:
+                    clock = self._playback() if self._playback else {
+                        "position": 0.0, "state": "PREPARING",
+                    }
+                except Exception:
+                    clock = {"position": None, "state": "UNKNOWN"}
+                finishing = self.info.duration > 0 and (
+                    self.offset + self.encoded_seconds >= self.info.duration - 2
+                )
+                wanted = self.budget.decide(
+                    self._published_duration(), clock.get("position"),
+                    clock.get("state"), finishing=finishing,
+                )
+                try:
+                    self._suspend(wanted)
+                except (psutil.Error, RuntimeError) as exc:
+                    self.control_warning = str(exc)
+                    LOG.warning("Controle de antecipação indisponível: %s", exc)
+                    if self._suspended:
+                        try:
+                            self._suspend(False)
+                        except (psutil.Error, RuntimeError):
+                            self.error = "Não foi possível retomar FFmpeg; transmissão interrompida."
+                            self.process.kill()
+
+    def _stop_process(self):
+        with self._control_lock:
+            if self.process.poll() is None:
+                try:
+                    self._suspend(False)
+                except (psutil.Error, RuntimeError):
+                    pass
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait(timeout=5)
+        for thread in self._readers:
+            thread.join(timeout=4)
+        self.process.stdout.close()
+        self.process.stderr.close()
+        self._guard.close()
+
+    def _fallback(self):
+        if self._plan_index + 1 >= len(self._plans):
+            return False
+        LOG.warning("Encoder %s falhou antes do LOAD; tentando alternativa.", self.plan.label)
+        self._restarting = True
+        try:
+            self._stop_process()
+            detail = "\n".join(self._tail)[-600:]
+            self.fallbacks.append({"encoder": self.plan.label, "reason": detail})
+            with self._control_lock:
+                for path in self.directory.iterdir():
+                    if path.name not in {"master.m3u8", ".owner.json"}:
+                        path.unlink(missing_ok=True)
+                self._plan_index += 1
+                with self._lock:
+                    self._tail.clear()
+                    self.speed, self.encoded_seconds = 0.0, 0.0
+                self._suspended = False
+                self._paused_total = self._published_seconds = 0.0
+                self._playlist_stamp = None
+                self.control_warning = None
+                if self.budget:
+                    self.budget.suspended = False
+                self._spawn()
+        finally:
+            self._restarting = False
+        return True
 
     def _guard_disk(self):
         while not self._stop.wait(3):
             if self.process.poll() is not None:
-                return
+                continue
             if shutil.disk_usage(self.directory).free < 256 * 1024 * 1024:
                 self.error = "Cache HLS interrompido: menos de 256 MB livres no disco."
                 self.process.terminate()
@@ -240,12 +413,23 @@ class HlsJob:
 
     def snapshot(self) -> dict:
         with self._lock:
+            paused = (time.monotonic() - self._pause_started) if self._suspended else 0
+            active_time = max(0.001, time.monotonic() - self._run_started - self._paused_total - paused)
             return {
-                "speed": self.speed,
+                "speed": self.encoded_seconds / active_time,
+                "reported_speed": self.speed,
                 "encoded_seconds": self.encoded_seconds,
+                "published_seconds": self._published_duration(),
                 "returncode": self.process.poll(),
                 "error": self.error,
                 "stderr_tail": list(self._tail),
+                "encoder": self.plan.label,
+                "hardware": self.plan.codec != "libx264",
+                "fallbacks": list(self.fallbacks),
+                "buffer_target_seconds": self.budget.target if self.budget else 0,
+                "buffer_ahead_seconds": self.budget.ahead if self.budget else None,
+                "resting": self._suspended,
+                "control_warning": self.control_warning,
             }
 
     def wait_ready(self, timeout: float = 90):
@@ -256,10 +440,12 @@ class HlsJob:
                 text = read_shared_text(playlist)
                 segments = [line for line in text.splitlines() if line and not line.startswith("#")]
                 complete = all((self.directory / name).is_file() for name in segments)
-                if complete and (len(segments) >= 2 or (segments and "#EXT-X-ENDLIST" in text)):
+                if complete and (len(segments) >= 3 or (segments and "#EXT-X-ENDLIST" in text)):
                     return
             code = self.process.poll()
             if code is not None and code != 0:
+                if self._fallback():
+                    continue
                 raise RuntimeError(
                     "ffmpeg falhou: " + "\n".join(self.snapshot()["stderr_tail"])[-2500:]
                 )
@@ -272,17 +458,10 @@ class HlsJob:
 
     def close(self):
         self._stop.set()
-        if self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=5)
+        self._stop_process()
+        mark_session(self.directory, closed=True)
         for thread in self._threads:
             thread.join(timeout=2)
-        self.process.stdout.close()
-        self.process.stderr.close()
         # A previous HTTP request can still hold a Windows file handle briefly.
         for attempt in range(6):
             try:

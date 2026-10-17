@@ -43,7 +43,7 @@ def parse_range(header: str, size: int) -> tuple[int, int]:
 
 @dataclass
 class Resource:
-    path: Path
+    path: Path | bytes
     mime: str
     directory: bool = False
     name: str = "media.mp4"
@@ -105,7 +105,9 @@ class MediaServer:
                     path, mime = resolved
                     # Copy tiny mutable playlists first; release Windows file handles before IO
                     # to a possibly slow receiver. Video and TS remain streamed from disk.
-                    if path.suffix == ".m3u8":
+                    if isinstance(path, bytes):
+                        source_stream = io.BytesIO(path)
+                    elif path.suffix == ".m3u8":
                         with open_shared_binary(path) as reader:
                             source_stream = io.BytesIO(reader.read())
                     else:
@@ -177,12 +179,27 @@ class MediaServer:
         LOG.info("Servidor HTTP na porta %s", self.port)
 
     def register_file(self, path: Path, mime: str | None = None) -> str:
-        name = "media.mkv" if path.suffix.lower() == ".mkv" else "media.mp4"
-        mime = mime or ("video/x-matroska" if name == "media.mkv" else "video/mp4")
+        suffix = path.suffix.lower()
+        types = {'.mkv': 'video/x-matroska', '.mp4': 'video/mp4',
+                 '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png'}
+        name = 'media' + (suffix if suffix in types else '.mp4')
+        mime = mime or types.get(suffix, 'video/mp4')
         return self._register(Resource(path.resolve(), mime, name=name))
 
     def register_hls(self, directory: Path) -> str:
         return self._register(Resource(directory.resolve(), "application/vnd.apple.mpegurl", True))
+
+    def register_image(self, data: bytes) -> str:
+        """Keep the selected cover alive independently of the disk metadata cache."""
+        if not isinstance(data, bytes) or not data or len(data) > 6 * 1024 * 1024:
+            raise ValueError('Capa vazia ou maior que 6 MB.')
+        if data.startswith(b'\xff\xd8\xff'):
+            mime = 'image/jpeg'
+        elif data.startswith(b'\x89PNG\r\n\x1a\n'):
+            mime = 'image/png'
+        else:
+            raise ValueError('Formato de capa não suportado: use JPEG ou PNG.')
+        return self._register(Resource(data, mime, name='cover'))
 
     def _register(self, resource: Resource) -> str:
         token = secrets.token_urlsafe(24)
@@ -191,7 +208,7 @@ class MediaServer:
             self._stats[token] = {"get_ok": 0, "head_ok": 0, "errors": 0, "last_status": None}
         return token
 
-    def resolve(self, parts: list[str]) -> tuple[Path, str] | None:
+    def resolve(self, parts: list[str]) -> tuple[Path | bytes, str] | None:
         with self._lock:
             resource = self._resources.get(parts[0])
         if not resource:
